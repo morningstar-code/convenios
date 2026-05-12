@@ -12,23 +12,9 @@ import prisma from "@/lib/prisma";
 import { stringArrayToJson } from "@/lib/json-array";
 import { OpenAIExtractionError } from "@/lib/openai";
 import type { InstrumentType } from "@prisma/client";
+import { loadConventionDocumentBuffer } from "@/lib/load-convention-document-buffer";
 
 export const runtime = "nodejs";
-
-async function loadBuffer(document: {
-  blobUrl: string;
-  blobPathname: string;
-}): Promise<Buffer> {
-  if (document.blobUrl.includes("/uploads/")) {
-    const path = await import("path");
-    const fs = await import("fs/promises");
-    const filename = document.blobPathname.replace(/^uploads\//, "");
-    return fs.readFile(path.join(process.cwd(), "public", "uploads", filename));
-  }
-  const res = await fetch(document.blobUrl);
-  if (!res.ok) throw new Error(`No se pudo descargar el documento: HTTP ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
-}
 
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -51,7 +37,7 @@ export async function POST(req: NextRequest) {
     const document = await findDocumentById(documentId);
     if (!document) return NextResponse.json({ error: "Documento no encontrado" }, { status: 404 });
 
-    const buffer = await loadBuffer(document);
+    const buffer = await loadConventionDocumentBuffer(document);
 
     const { raw, normalized: n, pipeline, sourceTextUsed } = await runExtractionPipeline({
       buffer,

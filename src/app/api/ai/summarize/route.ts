@@ -12,31 +12,13 @@ import prisma from "@/lib/prisma";
 import { z } from "zod";
 import { addMonths } from "date-fns";
 import { parseFichaDate } from "@/lib/ficha-date-parse";
+import { loadConventionDocumentBuffer } from "@/lib/load-convention-document-buffer";
 
 export const runtime = "nodejs";
 
 const RequestSchema = z.object({
   conventionId: z.string().min(1, "conventionId es requerido"),
 });
-
-async function loadDocumentBuffer(doc: {
-  blobUrl: string;
-  blobPathname: string;
-}): Promise<Buffer> {
-  if (doc.blobUrl.includes("/uploads/")) {
-    const path = await import("path");
-    const fs = await import("fs/promises");
-    const filename = doc.blobPathname.replace(/^uploads\//, "");
-    const filePath = path.join(process.cwd(), "public", "uploads", filename);
-    return fs.readFile(filePath);
-  }
-
-  const res = await fetch(doc.blobUrl);
-  if (!res.ok) {
-    throw new Error(`No se pudo descargar el documento: HTTP ${res.status}`);
-  }
-  return Buffer.from(await res.arrayBuffer());
-}
 
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -90,7 +72,7 @@ export async function POST(req: NextRequest) {
     if (latestDoc?.blobUrl && latestDoc?.blobPathname) {
       try {
         console.log(`[summarize] Loading document buffer from ${latestDoc.blobUrl}`);
-        documentBuffer = await loadDocumentBuffer({
+        documentBuffer = await loadConventionDocumentBuffer({
           blobUrl: latestDoc.blobUrl,
           blobPathname: latestDoc.blobPathname,
         });

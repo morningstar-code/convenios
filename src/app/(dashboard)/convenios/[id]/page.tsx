@@ -35,21 +35,12 @@ import {
   SignatureEvidenceDialog,
   type SignatureEvidence,
 } from "@/features/convenios/components/signature-evidence-dialog";
+import { getDocumentPublicUrl } from "@/lib/document-url";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
-}
-
-function getDocumentPublicUrl(
-  document: { blobUrl: string; blobPathname: string } | undefined
-): string | undefined {
-  if (!document) return undefined;
-  if (document.blobUrl.includes("localhost") && document.blobPathname.startsWith("uploads/")) {
-    return `/${document.blobPathname}`;
-  }
-  return document.blobUrl;
 }
 
 function getSignatureEvidence(

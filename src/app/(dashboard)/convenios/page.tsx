@@ -12,6 +12,7 @@ import { ConventionFiltersBar } from "@/features/convenios/components/convention
 import { getSession } from "@/lib/auth";
 import type { ConventionStatus, InstrumentType } from "@/types";
 import { INSTRUMENT_TYPE_LABELS } from "@/types";
+import { getDocumentPublicUrl } from "@/lib/document-url";
 
 export const dynamic = "force-dynamic";
 
@@ -192,6 +193,9 @@ export default async function ConveniosPage({ searchParams }: PageProps) {
                   <tbody className="divide-y divide-slate-100">
                     {conventions.map((conv, index) => {
                       const pdfName = conv.documents?.[0]?.originalName;
+                      const docHref = conv.documents?.[0]
+                        ? getDocumentPublicUrl(conv.documents[0])
+                        : undefined;
                       const rowNumber = (page - 1) * limit + index + 1;
                       const organismoFallback = inferOrganismoFromPdfName(pdfName);
                       const organismo =
@@ -266,13 +270,13 @@ export default async function ConveniosPage({ searchParams }: PageProps) {
                           )}
                         </td>
                         <td className="px-4 py-4">
-                          {conv.documents?.[0] ? (
+                          {docHref ? (
                             <a
-                              href={conv.documents[0].blobUrl}
+                              href={docHref}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
-                              title={conv.documents[0].originalName}
+                              title={conv.documents?.[0]?.originalName}
                             >
                               Hyperlink
                               <ExternalLink className="h-3.5 w-3.5 shrink-0" />

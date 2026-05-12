@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth";
 import { ProcessDocButton } from "@/features/documentos/components/process-doc-button";
+import { getDocumentPublicUrl } from "@/lib/document-url";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +96,9 @@ export default async function DocumentosPage() {
               />
             ) : (
               <div className="divide-y divide-slate-100">
-                {documents.map((doc) => (
+                {documents.map((doc) => {
+                  const downloadHref = getDocumentPublicUrl(doc);
+                  return (
                   <div
                     key={doc.id}
                     className="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors"
@@ -149,14 +152,17 @@ export default async function DocumentosPage() {
                         <StatusBadge status={doc.convention.estatus as ConventionStatus} />
                       )}
 
-                      <a href={doc.blobUrl} target="_blank" rel="noopener noreferrer">
-                        <Button variant="outline" size="sm">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </a>
+                      {downloadHref ? (
+                        <a href={downloadHref} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </a>
+                      ) : null}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

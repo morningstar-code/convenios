@@ -65,6 +65,7 @@ export async function findManyConventions(filter: ConventionFilter) {
             id: true,
             originalName: true,
             blobUrl: true,
+            blobPathname: true,
           },
         },
         drafts: {

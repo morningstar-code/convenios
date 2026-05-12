@@ -14,6 +14,7 @@ import prisma from "@/lib/prisma";
 import { stringArrayToJson } from "@/lib/json-array";
 import type { InstrumentType } from "@prisma/client";
 import { OpenAIExtractionError } from "@/lib/openai";
+import { loadConventionDocumentBuffer } from "@/lib/load-convention-document-buffer";
 
 export const runtime = "nodejs";
 
@@ -43,20 +44,10 @@ export async function POST(req: NextRequest) {
 
     console.log(`[process-document] Loading bytes ${document.blobUrl}`);
 
-    let buffer: Buffer;
-    if (document.blobUrl.includes("/uploads/")) {
-      const path = await import("path");
-      const fs = await import("fs/promises");
-      const filename = document.blobPathname.replace(/^uploads\//, "");
-      const filePath = path.join(process.cwd(), "public", "uploads", filename);
-      buffer = await fs.readFile(filePath);
-    } else {
-      const blobResponse = await fetch(document.blobUrl);
-      if (!blobResponse.ok) {
-        throw new Error(`No se pudo descargar el documento: HTTP ${blobResponse.status}`);
-      }
-      buffer = Buffer.from(await blobResponse.arrayBuffer());
-    }
+    const buffer = await loadConventionDocumentBuffer({
+      blobUrl: document.blobUrl,
+      blobPathname: document.blobPathname,
+    });
 
     const pipelineResult = await runExtractionPipeline({
       buffer,
