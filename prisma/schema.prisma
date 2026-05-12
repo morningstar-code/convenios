@@ -1,0 +1,226 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  admin
+  viewer
+}
+
+enum ConventionStatus {
+  vigente
+  cancelado
+}
+
+enum InstrumentType {
+  convenio_marco
+  convenio_especifico
+  memorando_entendimiento
+  acuerdo_cooperacion
+  protocolo
+  declaracion_conjunta
+  otro
+}
+
+enum AlertType {
+  vencimiento_30
+  vencimiento_60
+  vencimiento_90
+  vencido
+  revision_manual
+  sin_validar
+  documento_sin_procesar
+}
+
+enum AlertSeverity {
+  info
+  warning
+  critical
+}
+
+enum DraftType {
+  ficha_tecnica
+  resumen_ejecutivo
+  recomendacion_preliminar
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(viewer)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions     Session[]
+  conventions  Convention[]       @relation("CreatedBy")
+  updatedConventions Convention[] @relation("UpdatedBy")
+  validatedConventions Convention[] @relation("ValidatedBy")
+  alerts       ConventionAlert[]  @relation("AtendidaPor")
+  auditLogs    ConventionAuditLog[]
+  aiOutputs    ConventionAIOutput[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Convention {
+  id                      String           @id @default(cuid())
+  codigoInterno           String?
+  tipoInstrumento         InstrumentType
+  contraparte             String
+  pais                    String
+  fechaFirma              DateTime?
+  duracionTexto           String?
+  duracionMeses           Int?
+  fechaVencimientoCalculada DateTime?
+  renovacionAutomatica    Boolean          @default(false)
+  estatus                 ConventionStatus @default(vigente)
+  condicionTerminacion    String?
+  diasPreaviso            Int?
+  puntoFocal              String
+  cargoPuntoFocal         String?
+  correoPuntoFocal        String?
+  direccionesInvolucradas Json
+  objetivo                String
+  modalidadesCooperacion  Json
+  areasCooperacion        Json
+  impactoEsperado         String?
+  responsabilidadFinanciera Boolean        @default(false)
+  montoReferencial        Decimal?
+  observaciones           String?
+  conclusionInterna       String?
+  recomendacionPreliminar String?
+  validado                Boolean          @default(false)
+  validadoPor             String?
+  validadoEn              DateTime?
+  creadoPor               String
+  actualizadoPor          String?
+  archivedAt              DateTime?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  createdByUser    User?              @relation("CreatedBy", fields: [creadoPor], references: [id])
+  updatedByUser    User?              @relation("UpdatedBy", fields: [actualizadoPor], references: [id])
+  validatedByUser  User?              @relation("ValidatedBy", fields: [validadoPor], references: [id])
+  documents        ConventionDocument[]
+  alerts           ConventionAlert[]
+  drafts           ConventionDraft[]
+  auditLogs        ConventionAuditLog[]
+  aiOutputs        ConventionAIOutput[]
+
+  @@map("conventions")
+}
+
+model ConventionDocument {
+  id             String   @id @default(cuid())
+  conventionId   String
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  blobUrl        String
+  blobPathname   String
+  extractedText  String?
+  processedAt    DateTime?
+  processingError String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  convention Convention        @relation(fields: [conventionId], references: [id], onDelete: Cascade)
+  aiOutputs  ConventionAIOutput[]
+
+  @@map("convention_documents")
+}
+
+model ConventionAlert {
+  id           String        @id @default(cuid())
+  tipo         AlertType
+  severidad    AlertSeverity
+  titulo       String
+  descripcion  String
+  conventionId String?
+  atendida     Boolean       @default(false)
+  atendidaPor  String?
+  atendidaEn   DateTime?
+  createdAt    DateTime      @default(now())
+
+  convention    Convention?       @relation(fields: [conventionId], references: [id], onDelete: Cascade)
+  atendidaByUser User?            @relation("AtendidaPor", fields: [atendidaPor], references: [id])
+
+  @@map("convention_alerts")
+}
+
+model ConventionDraft {
+  id                  String    @id @default(cuid())
+  conventionId        String
+  tipo                DraftType
+  contenido           String
+  contenidoOriginalIA String?
+  modelo              String
+  documentoBase       String?
+  generadoPor         String?
+  aceptado            Boolean   @default(false)
+  editadoManualmente  Boolean   @default(false)
+  editadoPor          String?
+  editadoEn           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  convention Convention @relation(fields: [conventionId], references: [id], onDelete: Cascade)
+
+  @@map("convention_drafts")
+}
+
+model ConventionAuditLog {
+  id           String   @id @default(cuid())
+  conventionId String
+  userId       String
+  accion       String
+  descripcion  String
+  cambios      Json?
+  esIA         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  convention Convention @relation(fields: [conventionId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@map("convention_audit_logs")
+}
+
+model ConventionAIOutput {
+  id             String   @id @default(cuid())
+  conventionId   String
+  documentId     String?
+  userId         String
+  tipo           String
+  modelo         String
+  prompt         String?
+  resultado      Json
+  aceptado       Boolean  @default(false)
+  confianza      Float?
+  camposDudosos  Json
+  createdAt      DateTime @default(now())
+
+  convention Convention        @relation(fields: [conventionId], references: [id], onDelete: Cascade)
+  document   ConventionDocument? @relation(fields: [documentId], references: [id])
+  user       User               @relation(fields: [userId], references: [id])
+
+  @@map("convention_ai_outputs")
+}
