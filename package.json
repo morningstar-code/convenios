@@ -17,6 +17,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:migrate-status": "tsx prisma/migrate-convention-status.ts",
     "db:studio": "prisma studio",
+    "db:truncate-app-postgres": "tsx scripts/truncate-app-data-postgres.ts",
     "db:import-sqlite": "tsx scripts/import-sqlite-to-postgres.ts",
     "db:sync-uploads-to-blob": "tsx scripts/sync-uploads-to-vercel-blob.ts"
   },
