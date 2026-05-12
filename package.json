@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "postinstall": "prisma generate",
+    "vercel:push-env": "node scripts/push-env-vercel.cjs",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
