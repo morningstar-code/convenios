@@ -8,10 +8,26 @@ const globalForPrisma = globalThis as unknown as {
   pgPool: Pool | undefined;
 };
 
+/** Solo para que `next build` pueda cargar módulos sin Postgres real si .env sigue en SQLite legacy. */
+const BUILD_PLACEHOLDER_PG_URL =
+  "postgresql://127.0.0.1:65534/__next_build_placeholder__?connect_timeout=1";
+
+function isLikelyNextProductionBuild(): boolean {
+  if (process.env.npm_lifecycle_event === "build") return true;
+  const argv = process.argv.slice(1).join(" ");
+  return /\bnext\s+build\b/.test(argv);
+}
+
 function validateDatabaseUrl(): string {
   const url = process.env.DATABASE_URL?.trim() ?? "";
-  if (!url) throw new Error("DATABASE_URL no está definida.");
+  const building = isLikelyNextProductionBuild();
+
+  if (!url) {
+    if (building) return BUILD_PLACEHOLDER_PG_URL;
+    throw new Error("DATABASE_URL no está definida.");
+  }
   if (url.startsWith("file:")) {
+    if (building) return BUILD_PLACEHOLDER_PG_URL;
     throw new Error(
       "DATABASE_URL apunta a SQLite (file:...). Esta versión usa PostgreSQL. " +
         "Consulta .env.example y docker-compose.yml; migra datos con npm run db:import-sqlite."

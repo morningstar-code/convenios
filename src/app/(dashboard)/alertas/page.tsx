@@ -9,6 +9,7 @@ import type { AlertSeverity, AlertType } from "@/types";
 import { ALERT_TYPE_LABELS } from "@/types";
 import { getSession } from "@/lib/auth";
 import { RecalcularButton } from "@/features/alertas/components/recalcular-button";
+import { AtendidaButton } from "@/features/alertas/components/atendida-button";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -122,5 +123,3 @@ export default async function AlertasPage({ searchParams }: PageProps) {
     </div>
   );
 }
-
-import { AtendidaButton } from "@/features/alertas/components/atendida-button";
