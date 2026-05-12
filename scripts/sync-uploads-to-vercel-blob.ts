@@ -6,7 +6,7 @@ import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { put } from "@vercel/blob";
-import prisma from "../src/lib/prisma";
+import prisma, { disconnectPrismaAndPool } from "../src/lib/prisma";
 
 async function main() {
   const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
@@ -59,5 +59,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await disconnectPrismaAndPool();
   });

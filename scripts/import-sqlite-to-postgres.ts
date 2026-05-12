@@ -9,7 +9,8 @@ import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import prisma, { disconnectPrismaAndPool } from "../src/lib/prisma";
 
 function requireEnv(name: string): string {
   const v = process.env[name]?.trim();
@@ -66,7 +67,6 @@ async function main() {
   }
 
   const sqlite = new Database(sqlitePath, { readonly: true });
-  const prisma = new PrismaClient();
 
   try {
     const userRows = sqlite.prepare(`SELECT * FROM users`).all() as Record<string, unknown>[];
@@ -277,7 +277,7 @@ async function main() {
     );
   } finally {
     sqlite.close();
-    await prisma.$disconnect();
+    await disconnectPrismaAndPool();
   }
 }
 

@@ -48,7 +48,7 @@ export async function GET(
       .trim()
       .slice(0, 80);
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "Content-Disposition": `attachment; filename="${encodeURIComponent(safeFilename)}.docx"`,

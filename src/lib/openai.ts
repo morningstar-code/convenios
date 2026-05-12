@@ -1014,6 +1014,52 @@ Genera la ficha técnica basándote en el contenido completo del documento. Los 
   }
 }
 
+/**
+ * Borrador de recomendación preliminar (texto plano) a partir de datos del convenio.
+ */
+export async function generateConventionRecommendation(
+  conventionData: Record<string, unknown>
+): Promise<string> {
+  const client = getOpenAIClient();
+  const model = models().recommend;
+
+  console.log(`[openai] generateConventionRecommendation — model: ${model}`);
+
+  const input = [
+    {
+      role: "system" as const,
+      content:
+        "Eres un asesor jurídico-institucional en cooperación internacional del sector telecomunicaciones. " +
+        "Redactas recomendaciones preliminares claras y ejecutivas en español. " +
+        "No inventes datos que no figuren explícitamente en los datos proporcionados.",
+    },
+    {
+      role: "user" as const,
+      content:
+        "Con los siguientes datos del instrumento, elabora una RECOMENDACIÓN PRELIMINAR en prosa " +
+        "(aproximadamente 4–8 párrafos breves) que incluya: síntesis del perfil del acuerdo; " +
+        "aspectos de seguimiento o revisión que sugieran los datos (sin afirmar hechos no contenidos); " +
+        "riesgos o lagunas si la información es escasa; y próximos pasos administrativos genéricos.\n\n" +
+        "DATOS DEL INSTRUMENTO:\n" +
+        JSON.stringify(conventionData, null, 2),
+    },
+  ];
+
+  try {
+    const response = await client.responses.create({
+      model,
+      input,
+    });
+    const text = response.output_text?.trim();
+    if (!text) throw new Error("Respuesta vacía del modelo");
+    return text;
+  } catch (err) {
+    const msg = toUserMessage(err);
+    console.error(`[openai] recommendation error: ${msg}`, err);
+    throw new OpenAIExtractionError(`Error al generar la recomendación: ${msg}`);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // healthCheckOpenAI
 // ─────────────────────────────────────────────────────────────────────────────

@@ -148,7 +148,6 @@ export async function POST(req: NextRequest) {
       cargoPuntoFocal: convention.cargoPuntoFocal,
       correoPuntoFocal: convention.correoPuntoFocal,
       condicionTerminacion: convention.condicionTerminacion,
-      vigenciaTipo: convention.vigenciaTipo,
       diasPreaviso: convention.diasPreaviso,
       estatus: convention.estatus,
       direccionesInvolucradas: convention.direccionesInvolucradas,

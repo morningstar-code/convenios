@@ -1,6 +1,6 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import prisma from "../src/lib/prisma";
+import prisma, { disconnectPrismaAndPool } from "../src/lib/prisma";
 
 async function main() {
   console.log("🌱 Seeding database...");
@@ -59,5 +59,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await disconnectPrismaAndPool();
   });
