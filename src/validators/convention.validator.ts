@@ -54,6 +54,8 @@ export const ConventionFilterSchema = z.object({
     ])
     .optional(),
   porVencer: z.enum(["30", "60", "90"]).optional(),
+  /** Instrumentos revisados por una persona (o los que faltan por revisar). */
+  validado: z.boolean().optional(),
   /** Año civil (fecha de firma guardada), en UTC como en la app */
   anioFirma: z.number().int().min(1900).max(2200).optional(),
   page: z.number().int().positive().default(1),

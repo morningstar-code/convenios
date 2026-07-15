@@ -3,7 +3,8 @@ import { ExternalLink, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { findManyConventions } from "@/repositories/convention.repository";
+import { findManyConventions, getDashboardStats } from "@/repositories/convention.repository";
+import { ConventionKpiBar } from "@/features/convenios/components/convention-kpi-bar";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { formatDate } from "@/lib/utils";
@@ -67,6 +68,7 @@ interface PageProps {
     estatus?: string;
     tipoInstrumento?: string;
     porVencer?: string;
+    validado?: string;
     anio?: string;
     page?: string;
     orderBy?: string;
@@ -93,6 +95,8 @@ export default async function ConveniosPage({ searchParams }: PageProps) {
     estatus: params.estatus as ConventionStatus | undefined,
     tipoInstrumento: params.tipoInstrumento as InstrumentType | undefined,
     porVencer: params.porVencer as "30" | "60" | "90" | undefined,
+    validado:
+      params.validado === "false" ? false : params.validado === "true" ? true : undefined,
     anioFirma,
     page: params.page ? parseInt(params.page) : 1,
     limit: 20,
@@ -100,7 +104,10 @@ export default async function ConveniosPage({ searchParams }: PageProps) {
     order: (params.order as "asc" | "desc") || "desc",
   };
 
-  const { data: conventions, total, page, limit } = await findManyConventions(filter);
+  const [{ data: conventions, total, page, limit }, stats] = await Promise.all([
+    findManyConventions(filter),
+    getDashboardStats(),
+  ]);
   const totalPages = Math.ceil(total / limit);
 
   return (
@@ -122,6 +129,9 @@ export default async function ConveniosPage({ searchParams }: PageProps) {
           </Link>
         )}
       </div>
+
+      {/* Indicadores — heredados del Dashboard, ahora como filtros del listado */}
+      <ConventionKpiBar stats={stats} params={params} />
 
       {/* Filters */}
       <ConventionFiltersBar currentParams={params} />

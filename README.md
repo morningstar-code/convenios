@@ -122,6 +122,8 @@ Accede en `http://localhost:3000`
 | `OPENAI_MODEL_EXTRACT` | Modelo para extracción (default: gpt-4.1-nano) | ❌ |
 | `OPENAI_MODEL_SUMMARY` | Modelo para resúmenes (default: gpt-4.1-nano) | ❌ |
 | `OPENAI_MODEL_RECOMMEND` | Modelo para recomendaciones (default: gpt-4.1-nano) | ❌ |
+| `OPENAI_MODEL_ROADMAP` | Modelo para la hoja de ruta (default: el de resúmenes) | ❌ |
+| `DRIVE_FOLDER_URL` | Carpeta de Drive con los MoU originales; activa el botón en Comparación | ❌ |
 | `BLOB_READ_WRITE_TOKEN` | Token de Vercel Blob | ✅ (producción) |
 | `JWT_SECRET` | Secreto para tokens JWT | ✅ |
 | `CRON_SECRET` | Secreto para proteger endpoint cron | ✅ (producción) |
@@ -221,6 +223,19 @@ OPENAI_MODEL_RECOMMEND → gpt-4.1-nano
 - Solo se usa en Route Handlers con `runtime = "nodejs"`
 - Si la variable no está configurada, el sistema devuelve error claro sin crashear
 - Los stack traces nunca llegan al cliente
+
+### Direcciones involucradas — organigrama oficial
+
+La IA **no puede inventar unidades del INDOTEL**. El organigrama 2026 vive en
+[`src/lib/indotel-org.ts`](src/lib/indotel-org.ts) y es la única fuente válida:
+
+- Se inyecta en los prompts de extracción y de resumen ejecutivo.
+- Al recibir la respuesta se filtra contra el catálogo (`filterDirecciones`): lo que no
+  exista se descarta, se registra un aviso y el campo queda marcado como dudoso.
+- Tolera variantes razonables ("Dirección de Ciberseguridad" → *Dirección de Ciberseguridad,
+  Comercio Electrónico y Firma Digital*) y siglas (FDT, OAI, DAU).
+
+**Cuando cambie el organigrama, edita ese archivo** y ejecuta `npm test`.
 
 ### Flujo de extracción IA
 

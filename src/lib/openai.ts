@@ -16,6 +16,12 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { normalizeFichaDuracionCell } from "@/lib/utils";
 import { sanitizeFichaConvenio } from "@/lib/ficha-utils";
+import {
+  DIRECCIONES_PROMPT_BLOCK,
+  filterDirecciones,
+  filterDireccionesText,
+  findUnknownDirecciones,
+} from "@/lib/indotel-org";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Client factory
@@ -112,6 +118,32 @@ export const ExtractionSchema = z.object({
 
 export type ExtractionResult = z.infer<typeof ExtractionSchema>;
 
+/**
+ * El prompt le pide al modelo que use el organigrama; esto lo garantiza.
+ * Lo que no exista en el catálogo se descarta y se marca como campo dudoso,
+ * para que quede a la vista de quien revisa.
+ */
+function enforceOrgChart(result: ExtractionResult): ExtractionResult {
+  const propuestas = result.direcciones_involucradas ?? [];
+  const inventadas = findUnknownDirecciones(propuestas);
+
+  if (inventadas.length > 0) {
+    console.warn(
+      `[openai] direcciones fuera del organigrama descartadas: ${inventadas.join(" | ")}`
+    );
+  }
+
+  return {
+    ...result,
+    direcciones_involucradas: filterDirecciones(propuestas),
+    campos_dudosos:
+      inventadas.length > 0 &&
+      !result.campos_dudosos.includes("direcciones_involucradas")
+        ? [...result.campos_dudosos, "direcciones_involucradas"]
+        : result.campos_dudosos,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // JSON schema for OpenAI Responses API
 //
@@ -191,7 +223,9 @@ REGLAS CRÍTICAS — debes seguirlas siempre:
 - dias_preaviso debe ser null si no se menciona explícitamente o no puede calcularse.
 - fecha_firma en formato ISO YYYY-MM-DD o null.
 - confianza_extraccion: 0.9–1.0 = datos muy claros y completos; 0.6–0.8 = algunos campos inciertos; 0.0–0.5 = document incompleto o confuso.
-- Devuelve SOLO el JSON estructurado, sin texto adicional, sin markdown, sin explicaciones.`;
+- Devuelve SOLO el JSON estructurado, sin texto adicional, sin markdown, sin explicaciones.
+
+${DIRECCIONES_PROMPT_BLOCK}`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // extractConventionFieldsFromText
@@ -257,7 +291,7 @@ export async function extractConventionFieldsFromText(
     const lenient = ExtractionSchema.partial().safeParse(parsed);
     if (lenient.success) {
       // Return with defaults for missing fields
-      return ExtractionSchema.parse({
+      return enforceOrgChart(ExtractionSchema.parse({
         tipo_instrumento: null,
         contraparte: null,
         pais: null,
@@ -281,7 +315,7 @@ export async function extractConventionFieldsFromText(
         confianza_extraccion: 0.1,
         campos_dudosos: ["validación_fallida"],
         ...lenient.data,
-      });
+      }));
     }
     throw new OpenAIExtractionError(
       "El resultado de la extracción no cumple el formato esperado."
@@ -293,7 +327,7 @@ export async function extractConventionFieldsFromText(
       `campos_dudosos: [${result.data.campos_dudosos.join(", ")}]`
   );
 
-  return result.data;
+  return enforceOrgChart(result.data);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -398,7 +432,7 @@ export async function extractConventionFieldsFromBuffer(
     // Lenient fallback
     const lenient = ExtractionSchema.partial().safeParse(parsed);
     if (lenient.success) {
-      return ExtractionSchema.parse({
+      return enforceOrgChart(ExtractionSchema.parse({
         tipo_instrumento: null,
         contraparte: null,
         pais: null,
@@ -422,7 +456,7 @@ export async function extractConventionFieldsFromBuffer(
         confianza_extraccion: 0.1,
         campos_dudosos: ["validación_fallida"],
         ...lenient.data,
-      });
+      }));
     }
     throw new OpenAIExtractionError(
       "El resultado de la extracción no cumple el formato esperado."
@@ -434,7 +468,7 @@ export async function extractConventionFieldsFromBuffer(
       `campos_dudosos: [${result.data.campos_dudosos.join(", ")}]`
   );
 
-  return result.data;
+  return enforceOrgChart(result.data);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -763,6 +797,32 @@ export function choosePreferredPointFocal(
   return preferred || "[Dato no disponible en el documento]";
 }
 
+/**
+ * Deja en la ficha solo unidades del organigrama oficial. Si el modelo no
+ * acertó ninguna, cae en las que ya están guardadas en el instrumento (que a su
+ * vez pasaron por este mismo filtro al extraerse) y, en último caso, en la
+ * Dirección de Relaciones Internacionales: en un instrumento de cooperación
+ * internacional siempre participa.
+ */
+export function chooseOfficialDirecciones(
+  modelValue: string,
+  conventionData: Record<string, unknown>
+): string {
+  const desdeModelo = filterDireccionesText(modelValue ?? "");
+  if (desdeModelo) return desdeModelo;
+
+  const guardadas = conventionData.direccionesInvolucradas;
+  if (Array.isArray(guardadas)) {
+    const desdeBD = filterDirecciones(guardadas.map((d) => String(d)));
+    if (desdeBD.length > 0) return desdeBD.join("\n");
+  }
+
+  console.warn(
+    "[openai] ficha: ninguna dirección válida del organigrama; se usa Relaciones Internacionales"
+  );
+  return "Dirección de Relaciones Internacionales";
+}
+
 const FICHA_JSON_SCHEMA = {
   type: "object",
   properties: {
@@ -850,14 +910,13 @@ CAMPOS DE LA TABLA IDENTIFICATORIA
   Si no puedes identificar con seguridad el contacto de INDOTEL, escribe exactamente "[Dato no disponible en el documento]". Nunca devuelvas el nombre de la contraparte en este campo.
 
 - direccionesInvolucradas: ⚠️ CAMPO CRÍTICO — LEE ESTE CAMPO CON MUCHO CUIDADO.
-  Este campo se refiere EXCLUSIVAMENTE a las UNIDADES ORGANIZATIVAS INTERNAS (Direcciones, Departamentos, Divisiones) del organigrama institucional que participan en la implementación del convenio.
+  Unidades organizativas INTERNAS del INDOTEL que participan en la implementación del instrumento.
   ❌ NO es una dirección postal ni una dirección física de calle.
-  ✅ SÍ son ejemplos correctos: "Dirección del Espectro Radioeléctrico", "Dirección de Ciberseguridad", "Dirección de Relaciones Internacionales", "Dirección de Regulación y Defensa a la Competencia"
-  Analiza el documento completo y deduce cuáles direcciones de INDOTEL probablemente participan, a partir del objeto del convenio, áreas técnicas, actividades, obligaciones, coordinación internacional, regulación, espectro, ciberseguridad, defensa de la competencia, asuntos jurídicos u otras funciones institucionales relacionadas.
-  Prioriza SIEMPRE áreas internas de INDOTEL, no unidades de la contraparte.
-  Si el documento no las enumera explícitamente, infiérelas razonablemente desde el contenido integral del instrumento, pero sin inventar áreas absurdas o desconectadas del texto.
-  Formato: una dirección por línea usando \\n, sin bullets, sin numeración y sin agregar fuentes.
-  Si no hay base suficiente para inferir varias, incluye al menos la dirección de INDOTEL más claramente vinculada al objeto del convenio.
+  ❌ NO son unidades de la contraparte: solo INDOTEL.
+  ⛔ SOLO puedes usar nombres del ORGANIGRAMA OFICIAL que aparece al final de este mensaje, copiados EXACTAMENTE. Cualquier nombre que no esté en esa lista será descartado por el sistema.
+  Elige las unidades a partir del objeto del instrumento, sus áreas de cooperación, actividades y obligaciones.
+  Formato: una unidad por línea usando \\n, sin bullets, sin numeración y sin agregar fuentes.
+  Ante la duda, menos y correctas: es preferible listar solo la Dirección de Relaciones Internacionales que añadir unidades que no correspondan.
 
 - enlace: Nombre del archivo del documento, nombre de un archivo PDF de referencia, o enlace/correo mencionado en el instrumento.
 
@@ -909,12 +968,16 @@ REGLAS ABSOLUTAS
 - USA \\n para saltos de línea dentro de los strings JSON.
 - USA bullet • para listas (no guión, no asterisco).
 - TONO: formal, ejecutivo, institucional, analítico.
-- Devuelve SOLO el JSON válido, sin texto adicional.`;
+- Devuelve SOLO el JSON válido, sin texto adicional.
+
+${DIRECCIONES_PROMPT_BLOCK}`;
 
 export async function generateConventionFicha(
   conventionData: Record<string, unknown>,
   documentText?: string,
-  documentBuffer?: { buffer: Buffer; filename: string; mimeType: string }
+  documentBuffer?: { buffer: Buffer; filename: string; mimeType: string },
+  /** Indicaciones opcionales del usuario sobre enfoque, extensión o tono. */
+  instrucciones?: string
 ): Promise<FichaConvenio> {
   const client = getOpenAIClient();
   const model = models().summary;
@@ -924,11 +987,23 @@ export async function generateConventionFicha(
   console.log(
     `[openai] generateConventionFicha — model: ${model}, ` +
     `docText: ${docContext ? `${docContext.length} chars` : "none"}, ` +
-    `hasBuffer: ${!!documentBuffer}`
+    `hasBuffer: ${!!documentBuffer}, ` +
+    `instrucciones: ${instrucciones?.trim() ? `${instrucciones.trim().length} chars` : "none"}`
   );
 
   const duracionReminder =
     "\n\n[Recordatorio campo JSON duracion]: Por defecto \"Indefinida\". Solo sustituye por texto del plazo si el documento o los campos duracionTexto/duracionMeses indican una duración explícita.";
+
+  // Las indicaciones del usuario mandan sobre el estilo, nunca sobre las reglas
+  // de no inventar datos ni sobre el formato de salida.
+  const instructionsBlock = instrucciones?.trim()
+    ? `\n\n════════════════════════════════════════
+INDICACIONES DEL USUARIO PARA ESTE RESUMEN
+════════════════════════════════════════
+${instrucciones.trim().slice(0, 1_000)}
+
+Estas indicaciones ajustan el enfoque, la extensión o el tono. NO te autorizan a inventar datos que no estén en el documento, ni a cambiar el formato JSON de salida ni los nombres de los campos.`
+    : "";
 
   const structuredBlock = `CAMPOS ESTRUCTURADOS EXTRAÍDOS PREVIAMENTE:\n${JSON.stringify(conventionData, null, 2)}`;
 
@@ -957,7 +1032,7 @@ FUENTE 1 — ${structuredBlock}
 
 FUENTE 2 — DOCUMENTO PDF COMPLETO (adjunto arriba).
 
-Genera la ficha técnica basándote en el contenido completo del documento. Los campos estructurados son una guía; el texto del documento es la fuente primaria de verdad para los apartados narrativos. Escribe narrativas ricas y detalladas basadas en todo lo que leas en el PDF.${duracionReminder}`,
+Genera la ficha técnica basándote en el contenido completo del documento. Los campos estructurados son una guía; el texto del documento es la fuente primaria de verdad para los apartados narrativos. Escribe narrativas ricas y detalladas basadas en todo lo que leas en el PDF.${duracionReminder}${instructionsBlock}`,
         },
       ],
     });
@@ -971,12 +1046,12 @@ FUENTE 1 — ${structuredBlock}
 FUENTE 2 — TEXTO COMPLETO DEL DOCUMENTO ORIGINAL:
 ${docContext}
 
-Genera la ficha técnica basándote en el contenido completo del documento. Los campos estructurados son una guía; el texto del documento es la fuente primaria de verdad para los apartados narrativos.${duracionReminder}`,
+Genera la ficha técnica basándote en el contenido completo del documento. Los campos estructurados son una guía; el texto del documento es la fuente primaria de verdad para los apartados narrativos.${duracionReminder}${instructionsBlock}`,
     });
   } else {
     inputMessages.push({
       role: "user",
-      content: `Genera la ficha técnica del siguiente convenio a partir de los campos estructurados disponibles:\n\n${JSON.stringify(conventionData, null, 2)}${duracionReminder}`,
+      content: `Genera la ficha técnica del siguiente convenio a partir de los campos estructurados disponibles:\n\n${JSON.stringify(conventionData, null, 2)}${duracionReminder}${instructionsBlock}`,
     });
   }
 
@@ -996,6 +1071,10 @@ Genera la ficha técnica basándote en el contenido completo del documento. Los 
     const parsed = JSON.parse(response.output_text) as FichaConvenio;
     return sanitizeFichaConvenio({
       ...parsed,
+      direccionesInvolucradas: chooseOfficialDirecciones(
+        parsed.direccionesInvolucradas,
+        conventionData
+      ),
       nombreDocumento: choosePreferredDocumentName(parsed.nombreDocumento, conventionData),
       duracion: normalizeFichaDuracionCell(
         choosePreferredFichaDuration(parsed.duracion, conventionData, documentText)

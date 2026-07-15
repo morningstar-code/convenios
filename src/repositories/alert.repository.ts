@@ -69,6 +69,11 @@ export async function deleteAlertsForConvention(conventionId: string) {
   return prisma.conventionAlert.deleteMany({ where: { conventionId } });
 }
 
+/** Alertas sin atender — para el contador del menú. */
+export async function countPendingAlerts(): Promise<number> {
+  return prisma.conventionAlert.count({ where: { atendida: false } });
+}
+
 export async function getRecentAlerts(limit = 5) {
   return prisma.conventionAlert.findMany({
     where: { atendida: false },

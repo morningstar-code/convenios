@@ -60,7 +60,11 @@ interface FileItem {
   error?: string;
 }
 
-export default function NuevoDocumentoPage() {
+/**
+ * Bloque de carga de "1 · Carga / Ingreso": sube uno o varios PDF/DOCX y los
+ * procesa con IA. La cabecera y el listado de documentos los pone la página.
+ */
+export function IngresoUploader() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -190,15 +194,7 @@ export default function NuevoDocumentoPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Procesar documentos con IA</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Sube uno o varios PDF/DOCX de memorandos o acuerdos de cooperación y la IA los analizará todos automáticamente.
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {/* Pipeline visual */}
       <div className="flex items-center gap-2 text-sm overflow-x-auto pb-2">
         {[

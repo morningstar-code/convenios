@@ -15,12 +15,13 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { FichaConvenioCard, type FichaDraftMeta } from "@/features/convenios/components/ficha-convenio-card";
 import type { SignatureEvidence } from "@/features/convenios/components/signature-evidence-dialog";
 import type { FichaConvenio } from "@/lib/openai";
 import { sanitizeFichaConvenio } from "@/lib/ficha-utils";
-import { normalizeFichaDuracionCell } from "@/lib/utils";
+import { fichaToPlainText } from "@/lib/ficha-plain-text";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,14 @@ interface AIPanelProps {
   signatureEvidence?: SignatureEvidence;
 }
 
+/** Atajos para no tener que escribir un prompt: un clic y a generar. */
+const INSTRUCTION_PRESETS = [
+  { label: "Para dirección", text: "Redáctalo para el nivel directivo: prioriza decisiones y fechas límite sobre el detalle técnico." },
+  { label: "Solo compromisos", text: "Céntrate en los compromisos operativos de cada parte y en quién debe hacer qué." },
+  { label: "Una página", text: "Sé breve: el resumen completo no debe pasar de una página." },
+  { label: "Riesgos y vacíos", text: "Destaca los riesgos, las lagunas del instrumento y lo que quedó sin definir." },
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function tryParseFicha(contenido: string): FichaConvenio | null {
@@ -57,38 +66,6 @@ function tryParseFicha(contenido: string): FichaConvenio | null {
     }
   } catch { /* not JSON */ }
   return null;
-}
-
-function fichaToPlainText(ficha: FichaConvenio): string {
-  const lines = [
-    ficha.nombreDocumento,
-    "",
-    `Tipo de Instrumento: ${ficha.tipoInstrumento}`,
-    `Fecha de Firma: ${ficha.fechaFirma}`,
-    `Duración: ${normalizeFichaDuracionCell(ficha.duracion)}`,
-    `Estatus: ${ficha.estatus}`,
-    `Condición de Terminación: ${ficha.condicionTerminacion}`,
-    `Punto Focal: ${ficha.puntoFocal}`,
-    `Direcciones Involucradas:\n${ficha.direccionesInvolucradas}`,
-    `Enlace: ${ficha.enlace}`,
-    "",
-    `OBJETIVO\n${ficha.objetivo}`,
-    "",
-    `MODALIDADES DE COOPERACIÓN\n${ficha.modalidadesCooperacion}`,
-    "",
-    `ACTIVIDADES\n${ficha.actividades}`,
-    "",
-    `ÁREAS DE COOPERACIÓN TÉCNICA\n${ficha.areasCooperacion}`,
-    "",
-    `TEMAS SUGERIDOS\n${ficha.temasSugeridos}`,
-    "",
-    `RESPONSABILIDAD FINANCIERA\n${ficha.responsabilidadFinanciera}`,
-    "",
-    `IMPACTO ESPERADO\n${ficha.impactoEsperado}`,
-    "",
-    `CONCLUSIÓN\n${ficha.conclusion}`,
-  ];
-  return lines.join("\n");
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -108,6 +85,7 @@ export function AIPanel({
   const [copied, setCopied] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [pendingFicha, setPendingFicha] = useState<FichaConvenio | null>(null);
+  const [instrucciones, setInstrucciones] = useState("");
 
   const latestDraft = drafts[0] ?? null;
   const ficha = latestDraft ? tryParseFicha(latestDraft.contenido) : null;
@@ -133,7 +111,10 @@ export function AIPanel({
       const res = await fetch("/api/ai/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conventionId }),
+        body: JSON.stringify({
+          conventionId,
+          instrucciones: instrucciones.trim() || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Error al generar");
@@ -336,26 +317,81 @@ export function AIPanel({
               </>
             )}
 
-            {/* Generate / Regenerate */}
-            {!editMode && (
-              <Button
-                size="sm"
-                onClick={generate}
-                disabled={generating}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {generating ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generando...</>
-                ) : displayFicha ? (
-                  <><RefreshCw className="h-3.5 w-3.5" /> Regenerar</>
-                ) : (
-                  <><Sparkles className="h-3.5 w-3.5" /> Generar con IA</>
-                )}
-              </Button>
-            )}
           </div>
         )}
       </div>
+
+      {/* Generar — las instrucciones son opcionales: con un clic basta. */}
+      {isAdmin && !editMode && (
+        <Card className="border-slate-200 bg-slate-50/60">
+          <CardContent className="p-4 space-y-3">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="resumen-instrucciones"
+                className="text-[10px] font-semibold uppercase tracking-[0.09em] text-slate-500"
+              >
+                Instrucciones (opcional)
+              </label>
+              <Textarea
+                id="resumen-instrucciones"
+                value={instrucciones}
+                onChange={(e) => setInstrucciones(e.target.value)}
+                disabled={generating}
+                rows={2}
+                maxLength={1000}
+                placeholder="Ej.: enfócate en los compromisos operativos y en las fechas límite."
+                className="bg-white resize-none"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {INSTRUCTION_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  disabled={generating}
+                  onClick={() =>
+                    setInstrucciones((prev) =>
+                      prev.includes(preset.text)
+                        ? prev
+                        : [prev.trim(), preset.text].filter(Boolean).join(" ")
+                    )
+                  }
+                  className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:opacity-50"
+                >
+                  {preset.label}
+                </button>
+              ))}
+
+              <div className="ml-auto flex items-center gap-2">
+                {instrucciones && !generating && (
+                  <button
+                    type="button"
+                    onClick={() => setInstrucciones("")}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    Limpiar
+                  </button>
+                )}
+                <Button
+                  size="sm"
+                  onClick={generate}
+                  disabled={generating}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {generating ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generando...</>
+                  ) : displayFicha ? (
+                    <><RefreshCw className="h-3.5 w-3.5" /> Regenerar resumen</>
+                  ) : (
+                    <><Sparkles className="h-3.5 w-3.5" /> Generar resumen ejecutivo</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Edit mode notice */}
       {editMode && (
@@ -383,24 +419,11 @@ export function AIPanel({
           <CardContent className="py-16 text-center">
             <Sparkles className="h-10 w-10 text-slate-300 mx-auto mb-3" />
             <p className="text-sm text-slate-500 font-medium">No hay resumen ejecutivo aún</p>
-            {isAdmin && (
-              <>
-                <p className="text-xs text-slate-400 mt-1 mb-4">
-                  Presiona &quot;Generar con IA&quot; para crear el resumen ejecutivo del instrumento
-                </p>
-                <Button
-                  onClick={generate}
-                  disabled={generating}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  {generating ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Generando...</>
-                  ) : (
-                    <><Sparkles className="h-4 w-4" /> Generar con IA</>
-                  )}
-                </Button>
-              </>
-            )}
+            <p className="text-xs text-slate-400 mt-1">
+              {isAdmin
+                ? "La IA lo redacta leyendo el documento del instrumento. Puedes darle instrucciones arriba, o generarlo tal cual."
+                : "Todavía nadie ha generado el resumen ejecutivo de este instrumento."}
+            </p>
           </CardContent>
         </Card>
       )}

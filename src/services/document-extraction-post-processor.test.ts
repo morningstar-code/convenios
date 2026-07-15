@@ -6,6 +6,49 @@ import {
   mapTipoInstrumento,
 } from "@/services/document-extraction-post-processor";
 
+describe("direcciones involucradas — solo las del organigrama", () => {
+  it("descarta las que la IA se inventa y avisa de ello", () => {
+    const raw = minimalRaw({
+      direcciones_involucradas: [
+        { value: "Dirección de Relaciones Internacionales", confidence: 0.9, evidence: null },
+        { value: "Dirección de Innovación Disruptiva", confidence: 0.8, evidence: null },
+      ],
+    });
+
+    const { normalized, warningsAdded, rulesApplied } = postProcessDocumentExtraction(raw);
+
+    expect(normalized.direccionesInvolucradas).toEqual([
+      "Dirección de Relaciones Internacionales",
+    ]);
+    expect(rulesApplied.some((r) => r.startsWith("direcciones_involucradas"))).toBe(true);
+    expect(warningsAdded.some((w) => w.includes("Innovación Disruptiva"))).toBe(true);
+  });
+
+  it("completa el nombre oficial cuando la IA lo acorta", () => {
+    const raw = minimalRaw({
+      direcciones_involucradas: [
+        { value: "Dirección de Ciberseguridad", confidence: 0.9, evidence: null },
+      ],
+    });
+
+    expect(postProcessDocumentExtraction(raw).normalized.direccionesInvolucradas).toEqual([
+      "Dirección de Ciberseguridad, Comercio Electrónico y Firma Digital",
+    ]);
+  });
+
+  it("no avisa cuando todas son oficiales", () => {
+    const raw = minimalRaw({
+      direcciones_involucradas: [
+        { value: "Dirección Jurídica", confidence: 0.9, evidence: null },
+      ],
+    });
+
+    const { normalized, rulesApplied } = postProcessDocumentExtraction(raw);
+    expect(normalized.direccionesInvolucradas).toEqual(["Dirección Jurídica"]);
+    expect(rulesApplied.some((r) => r.startsWith("direcciones_involucradas"))).toBe(false);
+  });
+});
+
 describe("parseFlexibleDate", () => {
   it("parses ISO", () => {
     const d = parseFlexibleDate("2023-03-15");

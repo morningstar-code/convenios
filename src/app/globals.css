@@ -24,9 +24,40 @@ body {
   background: #94a3b8;
 }
 
-/* Print styles */
+/* Print styles
+   La ficha técnica se imprime para la carpeta física: al imprimir desaparecen
+   el menú, la barra superior y los controles, y queda solo el documento. */
 @media print {
   .no-print {
     display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* El contenido ocupa la hoja completa: sin hueco del sidebar ni cabecera. */
+  .print-canvas {
+    padding-left: 0 !important;
+  }
+
+  .print-sheet {
+    padding: 0 !important;
+  }
+
+  main {
+    padding-top: 0 !important;
+  }
+
+  /* Cada ficha empieza en su propia página. */
+  .break-after-page {
+    break-after: page;
+  }
+  .break-after-page:last-child {
+    break-after: auto;
+  }
+
+  a[href]::after {
+    content: "";
   }
 }

@@ -35,7 +35,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/convenios");
       router.refresh();
     } catch {
       setError("Error de conexión. Intente nuevamente.");

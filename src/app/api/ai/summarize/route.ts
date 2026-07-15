@@ -18,6 +18,8 @@ export const runtime = "nodejs";
 
 const RequestSchema = z.object({
   conventionId: z.string().min(1, "conventionId es requerido"),
+  /** Indicaciones opcionales de enfoque/extensión escritas por el usuario. */
+  instrucciones: z.string().max(1_000).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
 
-    const { conventionId } = parsed.data;
+    const { conventionId, instrucciones } = parsed.data;
 
     const [convention, latestDocWithText, latestDocAny, latestExtraction] = await Promise.all([
       findConventionById(conventionId),
@@ -154,7 +156,8 @@ export async function POST(req: NextRequest) {
     const ficha = await generateConventionFicha(
       conventionData as Record<string, unknown>,
       documentText,
-      bufferArg
+      bufferArg,
+      instrucciones
     );
 
     const draft = await prisma.conventionDraft.create({

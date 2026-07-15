@@ -4,6 +4,7 @@
  */
 
 import { addMonths } from "date-fns";
+import { filterDirecciones, findUnknownDirecciones } from "@/lib/indotel-org";
 import type { InstrumentType, ConventionStatus } from "@prisma/client";
 import type {
   DocumentExtractionRaw,
@@ -445,6 +446,22 @@ export function postProcessDocumentExtraction(raw: DocumentExtractionRaw): PostP
   const tipoInstrumento = mapTipoInstrumento(raw.tipo_instrumento.value);
   const estatus = mapConventionStatus(raw.estatus_documental_estimado.value);
 
+  // Las direcciones involucradas solo pueden salir del organigrama oficial:
+  // lo que el modelo se invente se descarta y queda registrado como aviso.
+  const direccionesPropuestas = listValues(raw.direcciones_involucradas);
+  const direccionesOficiales = filterDirecciones(direccionesPropuestas);
+  const direccionesInventadas = findUnknownDirecciones(direccionesPropuestas);
+
+  if (direccionesInventadas.length > 0) {
+    rulesApplied.push(
+      `direcciones_involucradas: ${direccionesInventadas.length} fuera del organigrama descartada(s)`
+    );
+    warningsAdded.push(
+      `direcciones_involucradas: la IA propuso unidades que no existen en el organigrama del INDOTEL y se descartaron (${direccionesInventadas.join("; ")}).`
+    );
+    camposDudosos.push("direcciones_involucradas");
+  }
+
   const objetivo =
     (raw.objetivo.value || "").trim() ||
     "Objeto no extraído con claridad — pendiente de validación humana.";
@@ -471,7 +488,7 @@ export function postProcessDocumentExtraction(raw: DocumentExtractionRaw): PostP
     puntoFocal: focal.nombre || "Por determinar",
     cargoPuntoFocal: focal.cargo,
     correoPuntoFocal: focal.correo,
-    direccionesInvolucradas: listValues(raw.direcciones_involucradas),
+    direccionesInvolucradas: direccionesOficiales,
     objetivo,
     modalidadesCooperacion: listValues(raw.modalidades_cooperacion),
     areasCooperacion: listValues(raw.areas_cooperacion),

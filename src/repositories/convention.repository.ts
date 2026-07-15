@@ -11,6 +11,7 @@ export async function findManyConventions(filter: ConventionFilter) {
     estatus,
     tipoInstrumento,
     porVencer,
+    validado,
     anioFirma,
     page,
     limit,
@@ -35,6 +36,7 @@ export async function findManyConventions(filter: ConventionFilter) {
   if (contraparte) where.contraparte = { contains: contraparte };
   if (estatus) where.estatus = estatus;
   if (tipoInstrumento) where.tipoInstrumento = tipoInstrumento;
+  if (validado !== undefined) where.validado = validado;
 
   if (typeof anioFirma === "number" && Number.isFinite(anioFirma)) {
     const start = new Date(Date.UTC(anioFirma, 0, 1));
@@ -90,7 +92,12 @@ export async function findConventionById(id: string) {
       documents: true,
       alerts: { orderBy: { createdAt: "desc" }, take: 10 },
       drafts: { orderBy: { createdAt: "desc" } },
-      auditLogs: { orderBy: { createdAt: "desc" }, take: 20 },
+      auditLogs: {
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        // La ficha muestra quién hizo cada cambio: persona o IA.
+        include: { user: { select: { id: true, name: true } } },
+      },
       createdByUser: { select: { id: true, name: true, email: true } },
       updatedByUser: { select: { id: true, name: true, email: true } },
       validatedByUser: { select: { id: true, name: true, email: true } },
@@ -99,6 +106,48 @@ export async function findConventionById(id: string) {
   });
   if (!row) return null;
   return normalizeConventionArrays(row);
+}
+
+/**
+ * Instrumento con el que abren "Ficha técnica" y "Seguimiento" cuando el
+ * usuario llega desde el menú y todavía no eligió ninguno.
+ */
+export async function findMostRecentConventionId(): Promise<string | null> {
+  const row = await prisma.convention.findFirst({
+    where: { archivedAt: null },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
+  return row?.id ?? null;
+}
+
+export type ConventionPickItem = {
+  id: string;
+  contraparte: string;
+  pais: string;
+  estatus: string;
+  validado: boolean;
+};
+
+/** Lista corta para los selectores de MoU y el comparador. */
+export async function findConventionPickList(): Promise<ConventionPickItem[]> {
+  return prisma.convention.findMany({
+    where: { archivedAt: null },
+    orderBy: [{ contraparte: "asc" }],
+    select: { id: true, contraparte: true, pais: true, estatus: true, validado: true },
+  });
+}
+
+/** Instrumentos del comparador, en el orden en que el usuario los eligió. */
+export async function findConventionsByIds(ids: string[]) {
+  if (ids.length === 0) return [];
+
+  const rows = await prisma.convention.findMany({
+    where: { id: { in: ids } },
+  });
+
+  const byId = new Map(rows.map((r) => [r.id, normalizeConventionArrays(r)]));
+  return ids.map((id) => byId.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c));
 }
 
 export async function createConvention(

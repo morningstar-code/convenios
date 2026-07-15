@@ -10,6 +10,7 @@ import {
   OpenAIConfigError,
 } from "@/lib/openai";
 import { DOCUMENT_EXTRACTION_JSON_SCHEMA } from "@/lib/document-extraction-json-schema";
+import { DIRECCIONES_PROMPT_BLOCK } from "@/lib/indotel-org";
 import {
   coerceDocumentExtractionRaw,
   emptyBooleanField,
@@ -84,7 +85,9 @@ SALIDA:
 - campos_dudosos: nombres lógicos de campos ambiguos.
 - warnings: mensajes breves (p. ej. evidencia contradictoria, secciones ausentes).
 
-No generes narrativa libre fuera del JSON.`;
+No generes narrativa libre fuera del JSON.
+
+${DIRECCIONES_PROMPT_BLOCK}`;
 
 const CRITICAL_FIELDS_SYSTEM_PROMPT = `Eres un revisor experto de campos críticos en convenios de INDOTEL.
 
